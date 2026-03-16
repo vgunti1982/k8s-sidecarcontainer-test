@@ -1,0 +1,50 @@
+# Default values for nginx-with-splunk-sidecar.
+
+image:
+  registry: docker.io
+  repository: bitnami/nginx
+  tag: "1.25"
+  pullPolicy: IfNotPresent
+
+serverBlock: |
+  listen 8080;
+  access_log /var/log/nginx/access.log;
+  error_log /var/log/nginx/error.log;
+  location / {
+    try_files $uri $uri/ =404;
+  }
+
+extraVolumes:
+  - name: logs
+    emptyDir: {}
+
+extraVolumeMounts:
+  - name: logs
+    mountPath: /var/log/nginx
+
+otel:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: otel/opentelemetry-collector-contrib
+    tag: latest
+  config: |
+    receivers:
+      filelog:
+        include:
+          - /var/log/nginx/access.log
+        start_at: beginning
+    exporters:
+      splunk_hec:
+        token: "XXX-XX-XXXX"
+        endpoint: "http://10.10.10.10:8088/services/collector/event"
+        index: "test_idx"
+    service:
+      pipelines:
+        logs:
+          receivers: [filelog]
+          exporters: [splunk_hec]
+
+service:
+  type: ClusterIP
+  port: 80
